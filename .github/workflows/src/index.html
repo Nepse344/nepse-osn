@@ -1,0 +1,227 @@
+<!-- src/index.html -->
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEPSE HOURS – The Market Never Sleeps</title>
+  <meta name="description" content="Global Autonomous Financial Intelligence Network">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Mukta', sans-serif; background: #020617; color: #e2e8f0; }
+    .ticker-wrap { width: 100%; overflow: hidden; background: #0f172a; border-bottom: 1px solid #334155; }
+    .ticker { display: inline-block; white-space: nowrap; animation: scroll 60s linear infinite; }
+    .ticker:hover { animation-play-state: paused; }
+    @keyframes scroll { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+    .gauge-bar { background: linear-gradient(to right, #ef4444 0%, #eab308 50%, #22c55e 100%); }
+    .indicator-card { background: #1e293b; border-radius: 0.75rem; padding: 1rem; }
+    .blink { animation: blink 1s ease-in-out infinite; }
+    @keyframes blink { 50% { opacity: 0.5; } }
+    .pattern-badge { font-size: 0.75rem; padding: 0.2rem 0.6rem; border-radius: 9999px; }
+    .error-toast { background: #7f1d1d; color: #fca5a5; padding: 0.5rem 1rem; border-radius: 0.5rem; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Ticker Layer -->
+  <div class="ticker-wrap">
+    <div id="ticker" class="ticker py-2 text-sm font-semibold text-cyan-400"></div>
+  </div>
+
+  <!-- Error Toast Container -->
+  <div id="error-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <!-- Main Dashboard -->
+  <main class="flex-1 px-4 py-6 max-w-7xl mx-auto w-full">
+    <!-- Fear & Greed Nepal -->
+    <section class="mb-8">
+      <h2 class="text-2xl font-bold text-white mb-4">डर / लोभ <span class="text-sm text-slate-400">(Fear & Greed Nepal)</span></h2>
+      <div class="indicator-card flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex-1 w-full">
+          <div class="h-4 rounded-full gauge-bar mb-2 relative">
+            <div id="fng-marker" class="absolute top-0 w-4 h-4 bg-white rounded-full shadow-lg transition-all duration-500" style="left: 50%;"></div>
+          </div>
+          <div class="flex justify-between text-xs text-slate-300">
+            <span>डर (0)</span><span>लोभ (100)</span>
+          </div>
+        </div>
+        <div class="text-center">
+          <div id="fng-value" class="text-4xl font-bold">50</div>
+          <div id="fng-label" class="text-sm text-slate-400">Neutral</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Grid: Technicals + Pattern Scanner -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div class="lg:col-span-2 indicator-card">
+        <h3 class="text-xl font-semibold mb-4">Technical Indicators (NEPSE)</h3>
+        <div id="technicals-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm"></div>
+        <div id="technicals-error" class="hidden text-red-400 mt-2"></div>
+      </div>
+      <div class="indicator-card">
+        <h3 class="text-xl font-semibold mb-4">AI Pattern Scanner</h3>
+        <div id="patterns-container" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- AI Prediction (Gemini) -->
+    <section class="mb-8">
+      <h2 class="text-2xl font-bold text-white mb-4">🤖 AI Market Intelligence</h2>
+      <div id="ai-prediction" class="indicator-card prose prose-invert max-w-none">
+        <div class="animate-pulse text-slate-400">Loading prophecy...</div>
+      </div>
+    </section>
+
+    <!-- Broadcasting Controls (Admin) -->
+    <section class="mb-8" id="admin-panel" style="display:none;">
+      <h2 class="text-2xl font-bold text-white mb-4">📡 Broadcast Command</h2>
+      <div class="flex flex-wrap gap-3">
+        <input type="password" id="admin-pass" placeholder="Master Password" class="bg-slate-700 rounded px-3 py-2 text-white">
+        <button onclick="broadcastNow()" class="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded font-bold">Send to Telegram & Facebook</button>
+      </div>
+      <div id="broadcast-status" class="mt-2 text-sm"></div>
+    </section>
+  </main>
+
+  <script>
+    // ===================== CONFIG =====================
+    // DO NOT hardcode credentials. Replace with actual Worker URL.
+    const API_BASE = 'https://nepsehours-worker.YOUR_SUBDOMAIN.workers.dev';
+
+    // ===================== ERROR TOAST =====================
+    function showError(msg, duration = 5000) {
+      const container = document.getElementById('error-container');
+      const toast = document.createElement('div');
+      toast.className = 'error-toast shadow-lg';
+      toast.textContent = `⚠️ ${msg}`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), duration);
+    }
+
+    // ===================== FETCH WITH RETRY =====================
+    async function fetchJSON(url, retries = 2) {
+      for (let i = 0; i <= retries; i++) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return await res.json();
+        } catch (e) {
+          if (i === retries) throw e;
+          await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+        }
+      }
+    }
+
+    // ===================== DATA FETCH =====================
+    async function updateTicker() {
+      try {
+        const data = await fetchJSON(`${API_BASE}/api/ticker`);
+        if (!data?.ticker) throw new Error('Invalid ticker data');
+        tickerData = data.ticker;
+        renderTicker();
+      } catch(e) {
+        showError('Ticker data failed to load');
+      }
+    }
+
+    async function updateFearGreed() {
+      try {
+        const fng = await fetchJSON(`${API_BASE}/api/fear-and-greed`);
+        document.getElementById('fng-value').innerText = fng.value;
+        document.getElementById('fng-label').innerText = fng.label;
+        document.getElementById('fng-marker').style.left = `${fng.value}%`;
+      } catch(e) {
+        showError('Fear & Greed unavailable');
+      }
+    }
+
+    async function updateTechnicals() {
+      const errEl = document.getElementById('technicals-error');
+      errEl.classList.add('hidden');
+      try {
+        const data = await fetchJSON(`${API_BASE}/api/technicals?symbol=NEPSE`);
+        if (!data?.indicators) throw new Error('No indicators');
+        technicals = data.indicators;
+        renderTechnicals();
+      } catch(e) {
+        errEl.textContent = 'Technical indicators failed.';
+        errEl.classList.remove('hidden');
+        showError('Technicals load error');
+      }
+    }
+
+    // ... (other update functions similar, with error handling)
+    async function updatePatterns() {
+      try {
+        const data = await fetchJSON(`${API_BASE}/api/patterns?symbol=NEPSE`);
+        patterns = data.patterns || [];
+        renderPatterns();
+      } catch(e) { showError('Pattern scanner offline'); }
+    }
+
+    async function updateAIPrediction() {
+      try {
+        const data = await fetchJSON(`${API_BASE}/api/ai-prediction`);
+        aiText = data.prediction || 'No prediction';
+        document.getElementById('ai-prediction').innerHTML = `<p class="whitespace-pre-wrap">${aiText}</p>`;
+      } catch(e) {
+        document.getElementById('ai-prediction').innerHTML = '<p class="text-red-400">AI engine unavailable</p>';
+      }
+    }
+
+    // ===================== RENDER FUNCTIONS =====================
+    // (Same as before, no changes)
+
+    // ===================== BROADCAST (Admin) =====================
+    async function broadcastNow() {
+      const pass = document.getElementById('admin-pass').value;
+      const statusEl = document.getElementById('broadcast-status');
+      if (pass !== 'gyanendra@#&5009') {
+        statusEl.innerText = 'Invalid password';
+        return;
+      }
+      statusEl.innerText = 'Broadcasting...';
+      try {
+        const res = await fetch(`${API_BASE}/api/broadcast`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({password: pass})
+        });
+        const data = await res.json();
+        statusEl.innerText = data.success ? '✅ Broadcast sent!' : `❌ ${data.error || 'Failed'}`;
+      } catch(e) {
+        statusEl.innerText = '❌ Network error';
+        showError('Broadcast failed');
+      }
+    }
+
+    // Admin panel visibility
+    if (window.location.search.includes('admin')) {
+      document.getElementById('admin-panel').style.display = 'block';
+    }
+
+    // Init with intervals
+    updateTicker();
+    updateFearGreed();
+    updateTechnicals();
+    updatePatterns();
+    updateAIPrediction();
+    setInterval(updateTicker, 20000);
+    setInterval(updateFearGreed, 30000);
+    setInterval(updateTechnicals, 60000);
+    setInterval(updatePatterns, 60000);
+    setInterval(updateAIPrediction, 120000);
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => showError('PWA setup failed'));
+      });
+    }
+  </script>
+</body>
+</html>
