@@ -1,0 +1,49 @@
+{
+  "name": "NEPSE HOURS — The Market Never Sleeps",
+  "short_name": "NEPSE HRS",
+  "description": "Real-time financial intelligence: NEPSE, global indices, AI predictions, technical analysis",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/dashboard.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
+  "categories": ["finance", "news", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Fear & Greed",
+      "url": "/?section=fear-greed",
+      "icons": [{ "src": "/icons/fng.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "AI Prediction",
+      "url": "/?section=ai",
+      "icons": [{ "src": "/icons/ai.png", "sizes": "96x96" }]
+    }
+  ]
+}
